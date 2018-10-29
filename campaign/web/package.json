@@ -1,0 +1,17 @@
+{
+  "name": "campaign",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "serve": "node node_modules/.bin/http-server"
+  },
+  "author": "Dusan Perisic",
+  "license": "ISC",
+  "dependencies": {
+    "bootstrap": "^4.1.3",
+    "http-server": "^0.11.1",
+    "web3": "^1.0.0-beta.36"
+  }
+}

@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet"
+          href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"
+          integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO"
+          crossorigin="anonymous">
+
+    <title>Campaign</title>
+
+    <style>
+        p {
+            margin: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center">Create Campaign</h1>
+
+        <form>
+            <div class="form-group row">
+                <label class="col-sm-4">Name</label>
+                <div class="col-sm-8">
+                    <input name="name" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group row">
+                <label class="col-sm-4">Description</label>
+                <div class="col-sm-8">
+                    <textarea name="description" class="form-control"></textarea>
+                </div>
+            </div>
+
+            <div class="form-group row">
+                <label class="col-sm-4">Duration (weeks)</label>
+                <div class="col-sm-8">
+                    <input name="duration" type="number" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group row">
+                <label class="col-sm-4">Goal</label>
+                <div class="col-sm-8">
+                    <input name="goal" type="number" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group row">
+                <label class="col-sm-4"></label>
+                <div class="col-sm-8">
+                    <button class="btn btn-primary" type="button">
+                        Save
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <hr>
+
+        <div id="campaigns"></div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+            integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+            crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"
+            integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49"
+            crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"
+            integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js/dist/web3.min.js"></script>
+    <script src="/config.js"></script>
+
+    <script>
+        window.addEventListener('load', function () {
+            if (typeof web3 !== 'undefined') {
+                web3js = new Web3(web3.currentProvider);
+            } else {
+                console.log('No web3? You should consider trying MetaMask!')
+                web3js = new Web3(new Web3.providers.HttpProvider(RPC));
+                startApp();
+            }
+        });
+        const startApp = () => {
+            web3.version.getNetwork((err, netId) => {
+                switch (netId) {
+                    case "1":
+                        console.log('This is mainnet');
+                        break;
+                    case "2":
+                        console.log('This is the deprecated Morden test network.');
+                        break;
+                    case "3":
+                        console.log('This is the ropsten test network.');
+                        break;
+                    case "4":
+                        console.log('This is the Rinkeby test network.');
+                        break;
+                    case "42":
+                        console.log('This is the Kovan test network.');
+                        break;
+                    default:
+                        console.log('This is an unknown network.');
+                }
+            });
+        };
+
+        let App = {
+            init: () => {
+                App.manager.contract = web3.eth
+                    .contract(App.manager.abi)
+                    .at(App.manager.address);
+
+                App.ui.submitButton.addEventListener('click', () => {
+                    App.campaign.createCampaign();
+                });
+            },
+            manager: {
+                abi: MANAGER_ABI,
+                address: MANAGER_ADDRESS,
+                contract: null,
+                showAllCampaigns: () => {
+                    App.ui.campaignsDiv.innerHTML = '';
+
+                    App.manager.contract.LogCampaignCreated({}, {'fromBlock': 0, 'toBlock': 'latest'})
+                        .watch((error, data) => {
+                            App.campaign.getCampaignInfo(data.args.campaignId, data.args.campaignAddress);
+                        });
+                },
+            },
+            campaign: {
+                abi: CAMPAIGN_ABI,
+                address: null,
+                contract: null,
+                createCampaign: () => {
+                    App.manager.contract.createNew(
+                        App.ui.name.value,
+                        App.ui.description.value,
+                        App.ui.duration.value,
+                        App.ui.goal.value,
+                        (error, data) => {
+                            console.log(error, data);
+                        }
+                    );
+                },
+                getCampaignInfo: (id, address) => {
+                    web3.eth
+                        .contract(App.campaign.abi)
+                        .at(address)
+                        .getInfo({}, (error, data) => {
+                            console.log(error, data);
+                            App.ui.helpers.appendCampaign({
+                                id: id,
+                                address: address,
+                                name: web3.toAscii(data[0]),
+                                startTs: data[1],
+                                endTs: data[2],
+                                totalBackers: data[3],
+                                totalRaised: data[4],
+                                goal: data[5],
+                            });
+                            App.campaign.setCampaignListeners(address);
+                        })
+                },
+                startCampaign: (address) => {
+                    web3.eth
+                        .contract(App.campaign.abi)
+                        .at(address)
+                        .startCampaign({}, (error, data) => {
+                            console.log(error, data);
+                        });
+                },
+                endCampaign: (address) => {
+                    web3.eth
+                        .contract(App.campaign.abi)
+                        .at(address)
+                        .endCampaign({}, (error, data) => {
+                            console.log(error, data);
+                        });
+                },
+                backTheProject: (address) => {
+                    web3.eth
+                        .contract(App.campaign.abi)
+                        .at(address)
+                        .backTheProject({
+                            from: web3.eth.coinbase,
+                            value: web3.toWei(5, 'ether')
+                        }, (error, data) => {
+                            console.log(error, data);
+                        });
+                },
+                setCampaignListeners: (address) => {
+                    web3.eth.contract(App.campaign.abi)
+                        .at(address)
+                        .LogProjectBacked({})
+                        .watch((error, data) => {
+                            console.log(error, data);
+
+                            web3.eth
+                                .contract(App.campaign.abi)
+                                .at(address)
+                                .getInfo({}, (error, data) => {
+                                    App.campaign.updateCampaign(address, data);
+                                })
+                        });
+                    web3.eth.contract(App.campaign.abi)
+                        .at(address)
+                        .LogCampaignStarted({})
+                        .watch((error, data) => {
+                            console.log(error, data);
+
+                            // TODO: Refactor - use data from 'data' response
+                            web3.eth
+                                .contract(App.campaign.abi)
+                                .at(address)
+                                .getInfo({}, (error, data) => {
+                                    App.campaign.updateCampaign(address, data);
+                                })
+                        })
+                },
+                updateCampaign: (address, campaign) => {
+                    $($('div[data-address=' + address + '] p:nth-child(4) span.value')).html(App.ui.helpers.timestampToDate(campaign[1]));
+                    $($('div[data-address=' + address + '] p:nth-child(5) span.value')).html(App.ui.helpers.timestampToDate(campaign[2]));
+                    $($('div[data-address=' + address + '] p:nth-child(6) span.value')).html(parseInt(campaign[3], 10));
+                    $($('div[data-address=' + address + '] p:nth-child(7) span.value')).html(web3.fromWei(parseInt(campaign[4], 10), 'ether'));
+                }
+            },
+            ui: {
+                campaignsDiv: document.querySelector('#campaigns'),
+                name: document.querySelector('input[name=name]'),
+                description: document.querySelector('textarea[name=description]'),
+                duration: document.querySelector('input[name=duration]'),
+                goal: document.querySelector('input[name=goal]'),
+                submitButton: document.querySelector('form button'),
+                helpers: {
+                    appendCampaign: (data) => {
+                        let campaignDiv = document.createElement('div');
+                        campaignDiv.className = 'alert alert-success';
+                        campaignDiv.setAttribute('data-address', data.address);
+
+                        campaignDiv.appendChild(App.ui.helpers.createElement('p', 'ID:', data.id));
+                        campaignDiv.appendChild(App.ui.helpers.createElement('p', 'Address:', data.address));
+                        campaignDiv.appendChild(App.ui.helpers.createElement('p', 'Name:', data.name));
+                        campaignDiv.appendChild(App.ui.helpers.createElement('p', 'Start:', App.ui.helpers.timestampToDate(data.startTs)));
+                        campaignDiv.appendChild(App.ui.helpers.createElement('p', 'End:', App.ui.helpers.timestampToDate(data.endTs)));
+                        campaignDiv.appendChild(App.ui.helpers.createElement('p', 'Total Backers:', data.totalBackers));
+                        campaignDiv.appendChild(App.ui.helpers.createElement('p', 'Total Raised:', web3.fromWei(data.totalRaised, 'ether')));
+                        campaignDiv.appendChild(App.ui.helpers.createElement('p', 'Goal:', data.goal));
+                        campaignDiv.appendChild(App.ui.helpers.createButton('btn btn-primary', 'Start', () => {
+                            App.campaign.startCampaign(data.address);
+                        }));
+                        campaignDiv.appendChild(App.ui.helpers.createButton('btn btn-danger', 'End', () => {
+                            App.campaign.endCampaign(data.address);
+                        }));
+                        campaignDiv.appendChild(App.ui.helpers.createButton('btn btn-success', 'Back The Project', () => {
+                            App.campaign.backTheProject(data.address);
+                        }));
+
+                        App.ui.campaignsDiv.appendChild(campaignDiv);
+                    },
+                    createElement: (_tag, _label, _value) => {
+                        let element = document.createElement(_tag);
+                        element.innerHTML = '<span class="label">' + _label + '</span> <span class="value">' + _value + '</span>';
+
+                        return element;
+                    },
+                    createButton: (_class, _label, _event) => {
+                        let element = document.createElement('button');
+                        element.className = _class;
+                        element.innerHTML = _label;
+                        element.addEventListener('click', _event);
+
+                        return element;
+                    },
+                    timestampToDate: (_timestamp) => {
+                        if (!_timestamp || _timestamp == 0) {
+                            return '-';
+                        }
+
+                        let date = new Date(parseInt(_timestamp, 10) * 1000);
+
+                        return App.ui.helpers.addPadding(date.getDate()) + '.' +
+                            App.ui.helpers.addPadding(date.getMonth()) + '.' +
+                            date.getFullYear() + ' ' +
+                            App.ui.helpers.addPadding(date.getHours()) + ':' +
+                            App.ui.helpers.addPadding(date.getMinutes());
+                    },
+                    addPadding: (value) => {
+                        return (value < 10 ? '0' : '') + value;
+                    }
+                }
+            },
+        };
+
+        App.init();
+        App.manager.showAllCampaigns();
+    </script>
+
+</body>
+</html>
